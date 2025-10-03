@@ -2066,7 +2066,7 @@ def backend_build(
         cmake_script.gitclone(be, "", be, "https://github.com/microsoft")
         # cmake_script.cmake (("-DCMAKE_INSTALL_PREFIX:PATH=/opt/tritonserver/backends/onnxruntime/install" ,"-DTRITON_BUILD_ONNXRUNTIME_VERSION=1.14.1", "-DTRITON_BUILD_CONTAINER_VERSION=23.04", ".."))
         cmake_script.cmd(
-            "git clone --recursive --single-branch --depth=1 -b develop https://github.com/ROCm/tritonserver-onnxruntime.git onnxruntime_backend")
+            "git clone --recursive --single-branch --depth=1 -b {} {}/tritonserver-onnxruntime.git onnxruntime_backend".format(FLAGS.ort_branch, FLAGS.ort_organization))
     else:
         cmake_script.gitclone(backend_repo(be), tag, be, github_organization)
 
