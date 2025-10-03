@@ -73,7 +73,7 @@ TRITON_VERSION_MAP = {
     "2.39.0": (
         "23.10",  # triton container
         "23.10",  # upstream container
-        "rel-1.17.2",  # ORT
+        "rel-1.23.0",  # ORT
         "2023.0.0",  # ORT OpenVINO
         "2023.0.0",  # Standalone OpenVINO
         "2.4.7",  # DCGM version
@@ -773,7 +773,7 @@ def onnxruntime_cmake_args(images, library_paths):
 
             if (target_machine() != "aarch64") and (
                 TRITON_VERSION_MAP[FLAGS.version][3] is not None
-            ):
+            ) and not FLAGS.enable_rocm:
                 cargs.append(
                     cmake_backend_enable(
                         "onnxruntime", "TRITON_ENABLE_ONNXRUNTIME_OPENVINO", True
@@ -1084,7 +1084,7 @@ RUN pip3 install --upgrade pip && \
 # Install boost version >= 1.78 for boost::span
 # Current libboost-dev apt packages are < 1.78, so install from tar.gz
 RUN wget -O /tmp/boost.tar.gz \
-        https://boostorg.jfrog.io/artifactory/main/release/1.80.0/source/boost_1_80_0.tar.gz && \
+        https://sourceforge.net/projects/boost/files/boost/1.80.0/boost_1_80_0.tar.gz/download && \
     (cd /tmp && tar xzf boost.tar.gz) && \
     mv /tmp/boost_1_80_0/boost /usr/include/boost
 
@@ -2066,7 +2066,7 @@ def backend_build(
         cmake_script.gitclone(be, "", be, "https://github.com/microsoft")
         # cmake_script.cmake (("-DCMAKE_INSTALL_PREFIX:PATH=/opt/tritonserver/backends/onnxruntime/install" ,"-DTRITON_BUILD_ONNXRUNTIME_VERSION=1.14.1", "-DTRITON_BUILD_CONTAINER_VERSION=23.04", ".."))
         cmake_script.cmd(
-            "git clone --recursive --single-branch --depth=1 -b add_migraphx_rocm_onnxrt_eps https://github.com/AMD-AI/tritonserver-onnxruntime.git onnxruntime_backend")
+            "git clone --recursive --single-branch --depth=1 -b develop https://github.com/ROCm/tritonserver-onnxruntime.git onnxruntime_backend")
     else:
         cmake_script.gitclone(backend_repo(be), tag, be, github_organization)
 
@@ -3067,7 +3067,7 @@ if __name__ == "__main__":
                     "enable_rocm",
                     script_build_dir,
                     script_install_dir,
-                    "https://github.com/AMD-AI",
+                    "https://github.com/ROCm",
                     images,
                     components,
                     library_paths,
