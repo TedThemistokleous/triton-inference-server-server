@@ -2295,8 +2295,15 @@ def cibase_build(
 
     # The onnxruntime_backend build produces some artifacts that
     # are needed for CI testing.
+    # Skip for ROCm wheel-based builds where test artifacts don't exist
     if "onnxruntime" in backends:
         ort_install_dir = os.path.join(build_dir, "onnxruntime_backend", "install")
+        ort_test_dir = os.path.join(ort_install_dir, "test")
+        if target_platform() == "windows":
+            cmake_script.cmd(f"if (Test-Path -Path {ort_test_dir}) {{")
+        else:
+            cmake_script.cmd(f"if [[ -d {ort_test_dir} ]]; then")
+        
         cmake_script.mkdir(os.path.join(ci_dir, "qa", "L0_custom_ops"))
         cmake_script.cp(
             os.path.join(ort_install_dir, "test", "libcustom_op_library.so"),
@@ -2309,6 +2316,8 @@ def cibase_build(
         # [WIP] other way than wildcard?
         backend_tests = os.path.join(build_dir, "onnxruntime_backend", "test", "*")
         cmake_script.cpdir(backend_tests, os.path.join(ci_dir, "qa"))
+        
+        cmake_script.cmd("}" if target_platform() == "windows" else "fi")
 
     # Need the build area for some backends so that they can be
     # rebuilt with specific options.
