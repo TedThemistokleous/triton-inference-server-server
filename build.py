@@ -73,14 +73,15 @@ TRITON_VERSION_MAP = {
     "2.39.0": (
         "23.10",  # triton container
         "23.10",  # upstream container
-        "rel-1.23.0",  # ORT
+        "rel-1.22.1",  # ORT from microsoft
+        # "rocm7.0_internal_testing",  # ORT from ROCm
         "2023.0.0",  # ORT OpenVINO
         "2023.0.0",  # Standalone OpenVINO
         "2.4.7",  # DCGM version
         "py310_23.1.0-1",  # Conda version
         "0.2.1",  # vLLM version
-        "6.0.2", #ROCm Version
-        "rocm-6.0.2", #MIGraphX Version Tags
+        "7.0.1", #ROCm Version
+        "rocm-7.0.1", #MIGraphX Version
     )
 }
 
@@ -723,6 +724,14 @@ def onnxruntime_cmake_args(images, library_paths):
             TRITON_VERSION_MAP[FLAGS.version][9],
             )
         )
+        cargs.append(
+            cmake_backend_arg(
+            "onnxruntime",
+            "TRITON_BUILD_MIGRAPHX_HOME",
+            None,
+            "/opt/rocm/",
+            )
+        )
 
     # If platform is jetpack do not use docker based build
     if target_platform() == "jetpack":
@@ -1081,33 +1090,19 @@ RUN apt-get update && \
 RUN pip3 install --upgrade pip && \
     pip3 install --upgrade wheel setuptools docker
 
+# Ensure CMake is available (ROCm PyTorch images have it but may need PATH update)
+RUN which cmake || (apt-get update && apt-get install -y cmake)
+
 # Install boost version >= 1.78 for boost::span
 # Current libboost-dev apt packages are < 1.78, so install from tar.gz
 RUN wget -O /tmp/boost.tar.gz \
         https://sourceforge.net/projects/boost/files/boost/1.80.0/boost_1_80_0.tar.gz/download && \
     (cd /tmp && tar xzf boost.tar.gz) && \
     mv /tmp/boost_1_80_0/boost /usr/include/boost
-
-# Server build requires recent version of CMake (FetchContent required)
-RUN apt update && apt install -y gpg wget && \
-    wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | \
-        gpg --dearmor - |  \
-        tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null && \
-    . /etc/os-release && \
-    echo "deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ $UBUNTU_CODENAME main" | \
-    tee /etc/apt/sources.list.d/kitware.list >/dev/null && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends cmake cmake-data
 """
 
-        if FLAGS.enable_gpu or FLAGS.enable_rocm:
+        if FLAGS.enable_gpu:
             df += install_dcgm_libraries(argmap["DCGM_VERSION"], target_machine())
-
-        if FLAGS.enable_rocm:
-            df += """
-RUN apt-get install -y libevent-extra-2.1-7   
-RUN dpkg -l | grep event          
-"""
     df += """
 ENV TRITON_SERVER_VERSION ${TRITON_VERSION}
 ENV NVIDIA_TRITON_SERVER_VERSION ${TRITON_CONTAINER_VERSION}
@@ -1683,7 +1678,7 @@ def create_build_dockerfiles(
             FLAGS.upstream_container_version
         )
     elif FLAGS.enable_rocm:
-        base_image = "rocm/pytorch:rocm6.0.2_ubuntu22.04_py3.10_pytorch_2.1.2"
+        base_image = "rocm/pytorch:rocm7.0_ubuntu22.04_py3.10_pytorch_release_2.8.0"
     else:
         base_image = "ubuntu:22.04"
 
@@ -1712,7 +1707,8 @@ def create_build_dockerfiles(
         if "gpu-base" in images:
             gpu_base_image = images["gpu-base"]
         elif FLAGS.enable_rocm:
-            gpu_base_image = "rocm/pytorch:rocm6.0.2_ubuntu22.04_py3.10_pytorch_2.1.2"
+            # gpu_base_image = "rocm/pytorch:rocm6.0.2_ubuntu22.04_py3.10_pytorch_2.1.2"
+            gpu_base_image = "rocm/pytorch:rocm7.0_ubuntu22.04_py3.10_pytorch_release_2.8.0"
         else:
             gpu_base_image = "nvcr.io/nvidia/tritonserver:{}-py3-min".format(
                 FLAGS.upstream_container_version
@@ -2062,11 +2058,11 @@ def backend_build(
     elif be == "pytorch" and FLAGS.enable_rocm:
         cmake_script.gitclone("tritonserver-pytorch", tag, be, github_organization)
     elif (be == "onnxruntime") and (FLAGS.enable_rocm):
-        cmake_script.comment("Clone onnxruntime itself.  includes directory is needed for rocm")
-        cmake_script.gitclone(be, "", be, "https://github.com/microsoft")
+        # cmake_script.comment("Clone onnxruntime itself.  includes directory is needed for rocm")
+        # cmake_script.gitclone(be, "", be, "https://github.com/microsoft")
         # cmake_script.cmake (("-DCMAKE_INSTALL_PREFIX:PATH=/opt/tritonserver/backends/onnxruntime/install" ,"-DTRITON_BUILD_ONNXRUNTIME_VERSION=1.14.1", "-DTRITON_BUILD_CONTAINER_VERSION=23.04", ".."))
         cmake_script.cmd(
-            "git clone --recursive --single-branch --depth=1 -b {} {}/tritonserver-onnxruntime.git onnxruntime_backend".format(FLAGS.ort_branch, FLAGS.ort_organization))
+            "git clone --recursive --single-branch --depth=1 -b {} {}/tritonserver-onnxruntime.git onnxruntime_backend".format("linsun12/debian_enablement_use_wheels", "https://github.com/ROCm"))
     else:
         cmake_script.gitclone(backend_repo(be), tag, be, github_organization)
 
