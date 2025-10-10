@@ -337,6 +337,41 @@ class BuildScript:
                 check_exitcode=True,
             )
             self.cmd("}" if target_platform() == "windows" else "fi")
+        
+        # If directory exists, verify it's on the correct branch and update if needed
+        if target_platform() != "windows":
+            self.cmd(f"if [[ -e {clone_dir} ]]; then")
+            self.cwd(clone_dir)
+            self.comment(f"Directory {clone_dir} exists, checking branch and updating...")
+            
+            # Get current branch
+            self.cmd(f"CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)")
+            
+            # Get remote URL
+            self.cmd(f"CURRENT_REMOTE=$(git config --get remote.origin.url)")
+            self.cmd(f"EXPECTED_REMOTE=\"{org}/{repo}.git\"")
+            
+            # Check if we're on the correct branch and remote
+            if tag and len(tag) > 0:
+                self.cmd(f"if [[ \"$CURRENT_BRANCH\" == \"{tag}\" ]] && [[ \"$CURRENT_REMOTE\" == *\"$EXPECTED_REMOTE\" ]]; then")
+                self.comment(f"  Branch matches '{tag}', updating...")
+                self.cmd("  git fetch origin --depth=1")
+                self.cmd(f"  git reset --hard origin/{tag}")
+                self.cmd("  git submodule update --init --recursive")
+                self.cmd("else")
+                self.comment(f"  Branch mismatch or different remote, re-cloning...")
+                self.cwd("..")
+                self.rmdir(clone_dir)
+                branch = f"-b {tag}"
+                self.cmd(f"  git clone --recursive --single-branch --depth=1 {branch} {org}/{repo}.git {subdir}")
+                self.cmd("fi")
+            else:
+                # No specific tag, just update
+                self.cmd("git fetch origin --depth=1")
+                self.cmd("git reset --hard origin/HEAD")
+                self.cmd("git submodule update --init --recursive")
+            
+            self.cmd("fi")
 
 
 def cmake_core_arg(name, type, value):
