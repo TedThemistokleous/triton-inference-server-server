@@ -1047,10 +1047,11 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
         && apt-get install -y ca-certificates curl gnupg \
         && install -m 0755 -d /etc/apt/keyrings \
-        && curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
+        && DISTRO_ID=$(. /etc/os-release && echo "$ID") \
+        && curl -fsSL https://download.docker.com/linux/${DISTRO_ID}/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg \
         && chmod a+r /etc/apt/keyrings/docker.gpg \
         && echo \
-            "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+            "deb [arch="$(dpkg --print-architecture)" signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${DISTRO_ID} \
             "$(. /etc/os-release && echo "$VERSION_CODENAME")" stable" | \
             tee /etc/apt/sources.list.d/docker.list > /dev/null \
         && apt-get update \
@@ -1107,6 +1108,18 @@ RUN wget -O /tmp/boost.tar.gz \
 
         if FLAGS.enable_gpu:
             df += install_dcgm_libraries(argmap["DCGM_VERSION"], target_machine())
+        
+        # Set ROCm environment variables for CMake to find HIP
+        # This is needed especially for Debian-based ROCm images which may not
+        # have these set by default
+        if FLAGS.enable_rocm:
+            df += """
+# Set ROCm environment variables for CMake to find HIP
+# CMAKE_PREFIX_PATH must include /opt/rocm so CMake can find hip-config.cmake
+ENV ROCM_PATH=/opt/rocm
+ENV HIP_PATH=/opt/rocm
+ENV CMAKE_PREFIX_PATH=/opt/rocm:/opt/rocm/lib/cmake:${CMAKE_PREFIX_PATH}
+"""
     df += """
 ENV TRITON_SERVER_VERSION ${TRITON_VERSION}
 ENV NVIDIA_TRITON_SERVER_VERSION ${TRITON_CONTAINER_VERSION}
@@ -1832,6 +1845,15 @@ def create_docker_build_script(script_name, container_install_dir, container_ci_
             runargs += ["-v", "\\\\.\pipe\docker_engine:\\\\.\pipe\docker_engine"]
         else:
             runargs += ["-v", "/var/run/docker.sock:/var/run/docker.sock"]
+            
+            # Add build cache volume mount for persistent CMake artifacts
+            if FLAGS.enable_build_cache:
+                cache_dir = FLAGS.build_cache_dir
+                # Create cache directory on host if it doesn't exist
+                docker_script.cmd(f"mkdir -p {cache_dir}")
+                runargs += ["-v", f"{cache_dir}:{FLAGS.tmp_dir}/tritonbuild"]
+                docker_script.comment(f"Using build cache directory: {cache_dir}")
+                docker_script.comment("This speeds up rebuilds by caching third-party dependencies")
 
         runargs += ["tritonserver_buildbase"]
 
@@ -2474,6 +2496,19 @@ if __name__ == "__main__":
         help='Do not use -it argument to "docker run" when performing container build.',
     )
     parser.add_argument(
+        "--enable-build-cache",
+        action="store_true",
+        required=False,
+        help="Enable persistent build cache to speed up rebuilds by caching third-party dependencies.",
+    )
+    parser.add_argument(
+        "--build-cache-dir",
+        type=str,
+        required=False,
+        default="/tmp/triton_build_cache",
+        help="Directory to cache build artifacts. Only used if --enable-build-cache is set. Default: /tmp/triton_build_cache",
+    )
+    parser.add_argument(
         "--no-container-pull",
         action="store_true",
         required=False,
@@ -2657,6 +2692,13 @@ if __name__ == "__main__":
         "--enable-rocm", action="store_true", required=False, help="Enable AMD GPU support."
     )
     parser.add_argument(
+        "--linux-distro",
+        type=str,
+        required=False,
+        default="ubuntu",
+        help="Linux distro to use for build.",
+    )
+    parser.add_argument(
         "--enable-mali-gpu",
         action="store_true",
         required=False,
@@ -2812,6 +2854,16 @@ if __name__ == "__main__":
     log("build dir {}".format(FLAGS.build_dir))
     log("install dir {}".format(FLAGS.install_dir))
     log("cmake dir {}".format(FLAGS.cmake_dir))
+    
+    # Log build cache status
+    if not FLAGS.no_container_build:
+        if FLAGS.enable_build_cache:
+            log("build cache ENABLED")
+            log("build cache dir {}".format(FLAGS.build_cache_dir))
+            log("  (to clear cache: rm -rf {})".format(FLAGS.build_cache_dir))
+        else:
+            log("build cache DISABLED")
+            log("  (to enable: --enable-build-cache, default dir: /tmp/triton_build_cache)")
 
     # Determine the default repo-tag that should be used for images,
     # backends, repo-agents, and caches if a repo-tag is not given
