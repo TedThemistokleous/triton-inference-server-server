@@ -308,38 +308,26 @@ class BuildScript:
         if not FLAGS.no_force_clone:
             self.rmdir(clone_dir)
 
+        # Check if directory already exists and handle accordingly
         if target_platform() == "windows":
+            # Windows path - simpler logic, just remove and clone fresh
             self.cmd(f"if (-Not (Test-Path -Path {clone_dir})) {{")
+            if tag.startswith("pull/"):
+                self.cmd(
+                    f"  git clone --recursive --depth=1 {org}/{repo}.git {subdir};",
+                    check_exitcode=True,
+                )
+            else:
+                branch = f"-b {tag}"
+                if(len(tag) == 0):
+                    branch = ""
+                self.cmd(
+                    f"  git clone --recursive --single-branch --depth=1 {branch} {org}/{repo}.git {subdir};",
+                    check_exitcode=True,
+                )
+            self.cmd("}")
         else:
-            self.cmd(f"if [[ ! -e {clone_dir} ]]; then")
-
-        # FIXME [DLIS-4045 - Currently the tag starting with "pull/" is not
-        # working with "--repo-tag" as the option is not forwarded to the
-        # individual repo build correctly.]
-        # If 'tag' starts with "pull/" then it must be of form
-        # "pull/<pr>/head". We just clone at "main" and then fetch the
-        # reference onto a new branch we name "tritonbuildref".
-        if tag.startswith("pull/"):
-            self.cmd(
-                f"  git clone --recursive --depth=1 {org}/{repo}.git {subdir};",
-                check_exitcode=True,
-            )
-            self.cmd("}" if target_platform() == "windows" else "fi")
-            self.cwd(subdir)
-            #self.cmd(f"git fetch origin {tag}:tritonbuildref", check_exitcode=True)
-            #self.cmd(f"git checkout tritonbuildref", check_exitcode=True)
-        else:
-            branch = f"-b {tag}"
-            if(len(tag) == 0):
-                branch = ""
-            self.cmd(
-                f"  git clone --recursive --single-branch --depth=1 {branch} {org}/{repo}.git {subdir};",
-                check_exitcode=True,
-            )
-            self.cmd("}" if target_platform() == "windows" else "fi")
-        
-        # If directory exists, verify it's on the correct branch and update if needed
-        if target_platform() != "windows":
+            # Linux/Mac - smart update logic
             self.cmd(f"if [[ -e {clone_dir} ]]; then")
             self.cwd(clone_dir)
             self.comment(f"Directory {clone_dir} exists, checking branch and updating...")
@@ -352,7 +340,7 @@ class BuildScript:
             self.cmd(f"EXPECTED_REMOTE=\"{org}/{repo}.git\"")
             
             # Check if we're on the correct branch and remote
-            if tag and len(tag) > 0:
+            if tag and len(tag) > 0 and not tag.startswith("pull/"):
                 self.cmd(f"if [[ \"$CURRENT_BRANCH\" == \"{tag}\" ]] && [[ \"$CURRENT_REMOTE\" == *\"$EXPECTED_REMOTE\" ]]; then")
                 self.comment(f"  Branch matches '{tag}', updating...")
                 self.cmd("  git fetch origin --depth=1")
@@ -366,11 +354,33 @@ class BuildScript:
                 self.cmd(f"  git clone --recursive --single-branch --depth=1 {branch} {org}/{repo}.git {subdir}")
                 self.cmd("fi")
             else:
-                # No specific tag, just update
+                # No specific tag or pull request, just update
                 self.cmd("git fetch origin --depth=1")
                 self.cmd("git reset --hard origin/HEAD")
                 self.cmd("git submodule update --init --recursive")
             
+            self.cmd("else")
+            # Directory doesn't exist, clone fresh
+            self.comment(f"Directory {clone_dir} does not exist, cloning...")
+            # FIXME [DLIS-4045 - Currently the tag starting with "pull/" is not
+            # working with "--repo-tag" as the option is not forwarded to the
+            # individual repo build correctly.]
+            if tag.startswith("pull/"):
+                self.cmd(
+                    f"  git clone --recursive --depth=1 {org}/{repo}.git {subdir}",
+                    check_exitcode=True,
+                )
+                self.cwd(subdir)
+                #self.cmd(f"git fetch origin {tag}:tritonbuildref", check_exitcode=True)
+                #self.cmd(f"git checkout tritonbuildref", check_exitcode=True)
+            else:
+                branch = f"-b {tag}"
+                if(len(tag) == 0):
+                    branch = ""
+                self.cmd(
+                    f"  git clone --recursive --single-branch --depth=1 {branch} {org}/{repo}.git {subdir}",
+                    check_exitcode=True,
+                )
             self.cmd("fi")
 
 
@@ -1598,6 +1608,19 @@ COPY docker/cpu_only/ /opt/rocm/
 ENTRYPOINT ["/opt/rocm/rocm_entrypoint.sh"]
 """
 
+    # Add wrapper script to display OS information at startup
+    df += """
+# Create wrapper script to display OS info before starting tritonserver
+RUN echo '#!/bin/bash' > /opt/tritonserver/tritonserver_wrapper.sh && \
+    echo 'echo "================================"' >> /opt/tritonserver/tritonserver_wrapper.sh && \
+    echo 'echo "Triton Inference Server"' >> /opt/tritonserver/tritonserver_wrapper.sh && \
+    echo 'echo "================================"' >> /opt/tritonserver/tritonserver_wrapper.sh && \
+    echo 'cat /etc/os-release | grep -E "^(PRETTY_NAME|VERSION)="' >> /opt/tritonserver/tritonserver_wrapper.sh && \
+    echo 'echo "================================"' >> /opt/tritonserver/tritonserver_wrapper.sh && \
+    echo 'exec "$@"' >> /opt/tritonserver/tritonserver_wrapper.sh && \
+    chmod +x /opt/tritonserver/tritonserver_wrapper.sh
+CMD ["/opt/tritonserver/tritonserver_wrapper.sh", "tritonserver"]
+"""
 
     df += """
 ENV NVIDIA_BUILD_ID {}
