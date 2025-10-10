@@ -81,7 +81,7 @@ TRITON_VERSION_MAP = {
         "py310_23.1.0-1",  # Conda version
         "0.2.1",  # vLLM version
         "7.0.1", #ROCm Version
-        "rocm-7.0.1", #MIGraphX Version
+        "rocm-7.0.1" #MIGraphX Version
     )
 }
 
@@ -472,6 +472,7 @@ def core_cmake_args(components, backends, cmake_dir, install_dir):
 
     cargs.append(cmake_core_enable("TRITON_ENABLE_GPU", FLAGS.enable_gpu))
     cargs.append(cmake_core_enable("TRITON_ENABLE_ROCM", FLAGS.enable_rocm))
+    cargs.append(cmake_core_arg("TRITON_LINUX_DISTRO", "STRING", FLAGS.linux_distro))
     cargs.append(
         cmake_core_arg(
             "TRITON_MIN_COMPUTE_CAPABILITY", None, FLAGS.min_compute_capability
@@ -521,6 +522,7 @@ def repoagent_cmake_args(images, components, ra, install_dir):
 
     cargs.append(cmake_repoagent_enable("TRITON_ENABLE_GPU", FLAGS.enable_gpu))
     cargs.append(cmake_repoagent_enable("TRITON_ENABLE_ROCM", FLAGS.enable_rocm))
+    cargs.append(cmake_repoagent_arg("TRITON_LINUX_DISTRO", "STRING", FLAGS.linux_distro))
     cargs += cmake_repoagent_extra_args()
     cargs.append("..")
     return cargs
@@ -543,6 +545,7 @@ def cache_cmake_args(images, components, cache, install_dir):
 
     cargs.append(cmake_cache_enable("TRITON_ENABLE_GPU", FLAGS.enable_gpu))
     cargs.append(cmake_cache_enable("TRITON_ENABLE_ROCM", FLAGS.enable_rocm))
+    cargs.append(cmake_cache_arg("TRITON_LINUX_DISTRO", "STRING", FLAGS.linux_distro))
     cargs += cmake_cache_extra_args()
     cargs.append("..")
     return cargs
@@ -594,6 +597,7 @@ def backend_cmake_args(images, components, be, install_dir, library_paths):
 
     cargs.append(cmake_backend_enable(be, "TRITON_ENABLE_GPU", FLAGS.enable_gpu))
     cargs.append(cmake_backend_enable(be, "TRITON_ENABLE_ROCM", FLAGS.enable_rocm))
+    cargs.append(cmake_backend_arg(be, "TRITON_LINUX_DISTRO", "STRING", FLAGS.linux_distro))
     cargs.append(cmake_backend_enable(be, "TRITON_ENABLE_MALI_GPU", FLAGS.enable_mali_gpu))
     cargs.append(cmake_backend_enable(be, "TRITON_ENABLE_STATS", FLAGS.enable_stats))
     cargs.append(cmake_backend_enable(be, "TRITON_ENABLE_METRICS", FLAGS.enable_metrics)
@@ -1678,7 +1682,10 @@ def create_build_dockerfiles(
             FLAGS.upstream_container_version
         )
     elif FLAGS.enable_rocm:
-        base_image = "rocm/pytorch:rocm7.0_ubuntu22.04_py3.10_pytorch_release_2.8.0"
+        if FLAGS.linux_distro == "debian":
+            base_image = "aisdkshared/private:rocm7.0_debian12_py3.10_pytorch_release_2.8.0"
+        else:
+            base_image = "rocm/pytorch:rocm7.0_ubuntu22.04_py3.10_pytorch_release_2.8.0"
     else:
         base_image = "ubuntu:22.04"
 
@@ -1707,8 +1714,10 @@ def create_build_dockerfiles(
         if "gpu-base" in images:
             gpu_base_image = images["gpu-base"]
         elif FLAGS.enable_rocm:
-            # gpu_base_image = "rocm/pytorch:rocm6.0.2_ubuntu22.04_py3.10_pytorch_2.1.2"
-            gpu_base_image = "rocm/pytorch:rocm7.0_ubuntu22.04_py3.10_pytorch_release_2.8.0"
+            if FLAGS.linux_distro == "debian":
+                base_image = "aisdkshared/private:rocm7.0_debian12_py3.10_pytorch_release_2.8.0"
+            else:
+                base_image = "rocm/pytorch:rocm7.0_ubuntu22.04_py3.10_pytorch_release_2.8.0"
         else:
             gpu_base_image = "nvcr.io/nvidia/tritonserver:{}-py3-min".format(
                 FLAGS.upstream_container_version
