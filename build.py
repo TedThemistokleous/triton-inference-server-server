@@ -1088,6 +1088,9 @@ SHELL ["cmd", "/S", "/C"]
 # Ensure apt-get won't prompt for selecting options
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Allow pip to install packages system-wide (needed for Debian 12+)
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
+
 # Install docker docker buildx
 RUN apt-get update \
         && apt-get install -y ca-certificates curl gnupg \
@@ -1294,6 +1297,8 @@ def install_vllm():
 ARG BASE_IMAGE="rocm/pytorch:rocm6.0.2_ubuntu22.04_py3.10_pytorch_2.1.2"
 ARG FA_GFX_ARCHS="gfx90a;gfx942"
 ARG FA_BRANCH="3d2b6f5"
+# Allow pip to install packages system-wide (needed for Debian 12+)
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
 RUN apt-get update && apt-get install -y \
         curl \
         ca-certificates \
@@ -1356,6 +1361,8 @@ ARG TRITON_VERSION
 ARG TRITON_CONTAINER_VERSION
 ENV TRITON_SERVER_VERSION ${TRITON_VERSION}
 ENV NVIDIA_TRITON_SERVER_VERSION ${TRITON_CONTAINER_VERSION}
+# Allow pip to install packages system-wide (needed for Debian 12+)
+ENV PIP_BREAK_SYSTEM_PACKAGES=1
 """
     if enable_rocm:
         df += """
@@ -1445,7 +1452,8 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 # Common dependencies. FIXME (can any of these be conditional? For
 # example libcurl only needed for GCS?)
-RUN apt-get update && \
+RUN apt-get clean && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* && \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
             software-properties-common \
             libb64-0d \
@@ -1608,19 +1616,6 @@ COPY docker/cpu_only/ /opt/rocm/
 ENTRYPOINT ["/opt/rocm/rocm_entrypoint.sh"]
 """
 
-    # Add wrapper script to display OS information at startup
-    df += """
-# Create wrapper script to display OS info before starting tritonserver
-RUN echo '#!/bin/bash' > /opt/tritonserver/tritonserver_wrapper.sh && \
-    echo 'echo "================================"' >> /opt/tritonserver/tritonserver_wrapper.sh && \
-    echo 'echo "Triton Inference Server"' >> /opt/tritonserver/tritonserver_wrapper.sh && \
-    echo 'echo "================================"' >> /opt/tritonserver/tritonserver_wrapper.sh && \
-    echo 'cat /etc/os-release | grep -E "^(PRETTY_NAME|VERSION)="' >> /opt/tritonserver/tritonserver_wrapper.sh && \
-    echo 'echo "================================"' >> /opt/tritonserver/tritonserver_wrapper.sh && \
-    echo 'exec "$@"' >> /opt/tritonserver/tritonserver_wrapper.sh && \
-    chmod +x /opt/tritonserver/tritonserver_wrapper.sh
-CMD ["/opt/tritonserver/tritonserver_wrapper.sh", "tritonserver"]
-"""
 
     df += """
 ENV NVIDIA_BUILD_ID {}
@@ -1754,7 +1749,8 @@ def create_build_dockerfiles(
         )
     elif FLAGS.enable_rocm:
         if FLAGS.linux_distro == "debian":
-            base_image = "aisdkshared/private:rocm7.0_debian12_py3.10_pytorch_release_2.8.0"
+            # base_image = "aisdkshared/private:rocm7.0_debian12_py3.10_pytorch_release_2.8.0"
+            base_image = "aisdkshared/private:rocm7.0_debian12_py3.10"
         else:
             base_image = "rocm/pytorch:rocm7.0_ubuntu22.04_py3.10_pytorch_release_2.8.0"
     else:
