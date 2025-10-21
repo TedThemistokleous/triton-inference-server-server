@@ -73,15 +73,11 @@ TRITON_VERSION_MAP = {
     "2.39.0": (
         "23.10",  # triton container
         "23.10",  # upstream container
-        "rel-1.22.1",  # ORT from microsoft
-        # "rocm7.0_internal_testing",  # ORT from ROCm
         "2023.0.0",  # ORT OpenVINO
         "2023.0.0",  # Standalone OpenVINO
         "2.4.7",  # DCGM version
         "py310_23.1.0-1",  # Conda version
         "0.2.1",  # vLLM version
-        "7.0.1", #ROCm Version
-        "rocm-7.0.1" #MIGraphX Version
     )
 }
 
@@ -720,16 +716,7 @@ def pytorch_cmake_args(images):
 
 
 def onnxruntime_cmake_args(images, library_paths):
-    print("onnxruntime branch ", TRITON_VERSION_MAP[FLAGS.version][2])
-    cargs = [
-        cmake_backend_arg(
-            "onnxruntime",
-            "TRITON_BUILD_ONNXRUNTIME_VERSION",
-            None,
-            TRITON_VERSION_MAP[FLAGS.version][2],
-        )
-    ]
-
+    cargs = []
     # TRITON_ENABLE_GPU is already set for all backends in backend_cmake_args()
     if FLAGS.enable_gpu:
         cargs.append(
@@ -749,28 +736,12 @@ def onnxruntime_cmake_args(images, library_paths):
                 "onnxruntime", "TRITON_ENABLE_ONNXRUNTIME_MIGRAPHX", True
             )
         )
-        cargs.append(
-            cmake_backend_arg(
-            "onnxruntime",
-            "TRITON_BUILD_ROCM_VERSION",
-            None,
-            TRITON_VERSION_MAP[FLAGS.version][8],
-            )
-        )
         cargs.append(   
             cmake_backend_arg(
             "onnxruntime",
             "TRITON_BUILD_ROCM_HOME",
             None,
            "/opt/rocm/",
-            )
-        )
-        cargs.append(
-            cmake_backend_arg(
-            "onnxruntime",
-            "TRITON_BUILD_MIGRAPHX_VERSION",
-            None,
-            TRITON_VERSION_MAP[FLAGS.version][9],
             )
         )
         cargs.append(
@@ -1141,7 +1112,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install --upgrade pip && \
-    pip3 install --upgrade wheel setuptools docker
+    pip3 install --upgrade wheel setuptools==69.5.1 docker
 
 # Ensure CMake is available (ROCm PyTorch images have it but may need PATH update)
 RUN which cmake || (apt-get update && apt-get install -y cmake)
@@ -1161,7 +1132,51 @@ RUN wget -O /tmp/boost.tar.gz \
         # This is needed especially for Debian-based ROCm images which may not
         # have these set by default
         if FLAGS.enable_rocm:
-            df += """
+            if FLAGS.linux_distro == "debian":
+                # Install ROCm on bare-metal Debian 12
+                df += """
+# Install ROCm on Debian 12
+RUN apt-get update && apt-get install -y wget gnupg2 && \\
+    wget https://repo.radeon.com/amdgpu-install/7.0.1/ubuntu/jammy/amdgpu-install_7.0.1.70001-1_all.deb && \\
+    apt-get install -y ./amdgpu-install_7.0.1.70001-1_all.deb && \\
+    rm amdgpu-install_7.0.1.70001-1_all.deb && \\
+    apt-get update && \\
+    apt-get install -y python3-setuptools python3-wheel && \\
+    apt-get install -y rocm-dev rocm-libs miopen-hip rocblas hipblas && \\
+    rm -rf /var/lib/apt/lists/*
+
+# Add user to video and render groups for GPU access
+RUN groupadd -f video && groupadd -f render
+
+# Install Python 3.10 
+RUN apt-get update && apt-get install -y \\
+    wget build-essential libssl-dev zlib1g-dev libbz2-dev \\
+    libreadline-dev libsqlite3-dev curl libncursesw5-dev \\
+    xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev && \\
+    wget https://www.python.org/ftp/python/3.10.16/Python-3.10.16.tgz && \\
+    tar xzf Python-3.10.16.tgz && \\
+    cd Python-3.10.16 && \\
+    ./configure --enable-optimizations && \\
+    make -j$(nproc) && \\
+    make altinstall && \\
+    cd .. && rm -rf Python-3.10.16 Python-3.10.16.tgz && \\
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 && \\
+    update-alternatives --install /usr/bin/python3 python3 /usr/local/bin/python3.10 2 && \\
+    ln -sf /usr/bin/python3 /usr/bin/python && \\
+    python3.10 --version && \\
+    python3.10 -m pip install --upgrade pip setuptools==69.5.1 wheel && \\
+    rm -rf /var/lib/apt/lists/*
+
+# Set ROCm environment variables for CMake to find HIP
+ENV ROCM_PATH=/opt/rocm
+ENV HIP_PATH=/opt/rocm
+ENV CMAKE_PREFIX_PATH=/opt/rocm:/opt/rocm/lib/cmake:${CMAKE_PREFIX_PATH}
+ENV PATH=/opt/rocm/bin:${PATH}
+ENV LD_LIBRARY_PATH=/opt/rocm/lib:${LD_LIBRARY_PATH}
+"""
+            else:
+                # Ubuntu or other distros - use existing ROCm installation
+                df += """
 # Set ROCm environment variables for CMake to find HIP
 # CMAKE_PREFIX_PATH must include /opt/rocm so CMake can find hip-config.cmake
 ENV ROCM_PATH=/opt/rocm
@@ -1511,7 +1526,7 @@ RUN apt-get update && \
             python3-pip \
             libpython3-dev && \
     pip3 install --upgrade pip && \
-    pip3 install --upgrade wheel setuptools && \
+    pip3 install --upgrade wheel setuptools==69.5.1 && \
     pip3 install --upgrade numpy && \
     rm -rf /var/lib/apt/lists/*
 """
@@ -1707,7 +1722,7 @@ ENV TRITON_SERVER_VERSION ${{TRITON_VERSION}}
 ENV NVIDIA_TRITON_SERVER_VERSION ${{TRITON_CONTAINER_VERSION}}
 LABEL com.nvidia.tritonserver.version="${{TRITON_SERVER_VERSION}}"
 
-RUN setx path "%path%;C:\opt\tritonserver\bin"
+RUN setx path "%path%;C:\\opt\\tritonserver\\bin"
 
 """.format(
         argmap["TRITON_VERSION"],
@@ -1749,10 +1764,17 @@ def create_build_dockerfiles(
         )
     elif FLAGS.enable_rocm:
         if FLAGS.linux_distro == "debian":
-            # base_image = "aisdkshared/private:rocm7.0_debian12_py3.10_pytorch_release_2.8.0"
-            base_image = "aisdkshared/private:rocm7.0_debian12_py3.10"
+            # Use bare-metal Debian 12 and install ROCm from scratch
+            base_image = "debian:12"
         else:
-            base_image = "rocm/pytorch:rocm7.0_ubuntu22.04_py3.10_pytorch_release_2.8.0"
+            # Check if onnxruntime backend is being built
+            has_onnxruntime = "onnxruntime" in backends
+            if has_onnxruntime:
+                # Use ROCm ONNX Runtime container which includes ORT and MIGraphX
+                base_image = "rocm/onnxruntime:rocm7.0_ub22.04_ort1.22_torch2.8.0"
+            else:
+                # Use ROCm PyTorch container for other backends
+                base_image = "rocm/pytorch:rocm7.0_ubuntu22.04_py3.10_pytorch_release_2.8.0"
     else:
         base_image = "ubuntu:22.04"
 
@@ -1782,7 +1804,7 @@ def create_build_dockerfiles(
             gpu_base_image = images["gpu-base"]
         elif FLAGS.enable_rocm:
             if FLAGS.linux_distro == "debian":
-                base_image = "aisdkshared/private:rocm7.0_debian12_py3.10_pytorch_release_2.8.0"
+                base_image = "debian:12"
             else:
                 base_image = "rocm/pytorch:rocm7.0_ubuntu22.04_py3.10_pytorch_release_2.8.0"
         else:
@@ -2143,9 +2165,6 @@ def backend_build(
     elif be == "pytorch" and FLAGS.enable_rocm:
         cmake_script.gitclone("tritonserver-pytorch", tag, be, github_organization)
     elif (be == "onnxruntime") and (FLAGS.enable_rocm):
-        # cmake_script.comment("Clone onnxruntime itself.  includes directory is needed for rocm")
-        # cmake_script.gitclone(be, "", be, "https://github.com/microsoft")
-        # cmake_script.cmake (("-DCMAKE_INSTALL_PREFIX:PATH=/opt/tritonserver/backends/onnxruntime/install" ,"-DTRITON_BUILD_ONNXRUNTIME_VERSION=1.14.1", "-DTRITON_BUILD_CONTAINER_VERSION=23.04", ".."))
         cmake_script.gitclone(
             "tritonserver-onnxruntime", "linsun12/debian_enablement_use_wheels", "onnxruntime_backend", "https://github.com/ROCm")
     else:

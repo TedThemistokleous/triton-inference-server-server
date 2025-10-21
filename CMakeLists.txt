@@ -245,7 +245,7 @@ if(${TRITON_ENABLE_ROCM})
   list(APPEND CMAKE_PREFIX_PATH ${rocm_cmake_components})
 
   # replicate strategy used by pytorch to get ROCM_VERSION
-  file(READ "${TRITON_ROCM_HOME}/.info/version-rocm" ROCM_VERSION_DEV_RAW)
+  file(READ "${TRITON_ROCM_HOME}/.info/version-dev" ROCM_VERSION_DEV_RAW)
   string(REGEX MATCH "^([0-9]+)\.([0-9]+)\.([0-9]+)-.*$" ROCM_VERSION_DEV_MATCH ${ROCM_VERSION_DEV_RAW})
   if (ROCM_VERSION_DEV_MATCH)
     set(ROCM_VERSION_DEV_MAJOR ${CMAKE_MATCH_1})
