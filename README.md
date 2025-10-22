@@ -36,7 +36,7 @@
 
 This repository contains ROCm-enabled builds of Triton Inference Server for AMD GPUs. The following backends are available or in development:
 
-- **ONNX Runtime Backend** - Fully functional with ROCm 7.0.1 and MIGraphX acceleration
+- **ONNX Runtime Backend** - Fully functional with ROCm 7.0 and MIGraphX acceleration
 - **vLLM Backend** - checkout other branches
 - **PyTorch Backend** - checkout other branches
 
