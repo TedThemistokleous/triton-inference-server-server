@@ -1474,6 +1474,9 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/* && \
             libb64-0d \
             libcurl4-openssl-dev \
             libre2-9 \
+            libevent-2.1-7 \
+            libevent-core-2.1-7 \
+            libevent-pthreads-2.1-7 \
             git \
             gperf \
             dirmngr \
@@ -1512,9 +1515,51 @@ RUN ln -sf ${_CUDA_COMPAT_PATH}/lib.real ${_CUDA_COMPAT_PATH}/lib \
  && ldconfig \
  && rm -f ${_CUDA_COMPAT_PATH}/lib
 """
+    elif enable_rocm:
+        df += """
+# Install Python 3.10 for Debian (needed for ONNX Runtime and other backends)
+RUN apt-get update && apt-get install -y \\
+    wget build-essential libssl-dev zlib1g-dev libbz2-dev \\
+    libreadline-dev libsqlite3-dev curl libncursesw5-dev \\
+    xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev && \\
+    wget https://www.python.org/ftp/python/3.10.16/Python-3.10.16.tgz && \\
+    tar xzf Python-3.10.16.tgz && \\
+    cd Python-3.10.16 && \\
+    ./configure --enable-optimizations && \\
+    make -j$(nproc) && \\
+    make altinstall && \\
+    cd .. && rm -rf Python-3.10.16 Python-3.10.16.tgz && \\
+    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 && \\
+    update-alternatives --install /usr/bin/python3 python3 /usr/local/bin/python3.10 2 && \\
+    ln -sf /usr/bin/python3 /usr/bin/python && \\
+    python3.10 --version && \\
+    python3.10 -m pip install --upgrade pip setuptools==69.5.1 wheel && \\
+    rm -rf /var/lib/apt/lists/*
+
+# Install ROCm runtime libraries for AMD GPU support
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends wget gnupg2 && \
+    wget https://repo.radeon.com/amdgpu-install/7.0.1/ubuntu/jammy/amdgpu-install_7.0.1.70001-1_all.deb && \
+    apt-get install -y ./amdgpu-install_7.0.1.70001-1_all.deb && \
+    rm amdgpu-install_7.0.1.70001-1_all.deb && \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+            hip-base \
+            rocm-device-libs \
+            rocblas \
+            hipblas \
+            miopen-hip \
+            rocrand \
+            rccl && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set ROCm environment variables
+ENV ROCM_PATH=/opt/rocm
+ENV HIP_PATH=/opt/rocm
+ENV LD_LIBRARY_PATH=/opt/rocm/lib:/opt/conda/envs/py_3.10/lib:${LD_LIBRARY_PATH}
+"""
     else:
-        if not enable_rocm:
-            df += add_cpu_libs_to_linux_dockerfile(backends, target_machine)
+        df += add_cpu_libs_to_linux_dockerfile(backends, target_machine)
 
     # Add dependencies needed for python backend
     if "python" in backends:
@@ -1764,7 +1809,7 @@ def create_build_dockerfiles(
         )
     elif FLAGS.enable_rocm:
         if FLAGS.linux_distro == "debian":
-            # Use bare-metal Debian 12 and install ROCm from scratch
+            # Use bare-metal Debian 12 and install ROCm in runtime from scratch
             base_image = "debian:12"
         else:
             # Check if onnxruntime backend is being built
