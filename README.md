@@ -26,9 +26,130 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 -->
 
-# Triton Inference Server
+# Triton Inference Server - ROCm Edition
 
 [![License](https://img.shields.io/badge/License-BSD3-lightgrey.svg)](https://opensource.org/licenses/BSD-3-Clause)
+
+----
+
+## ROCm Support
+
+This repository contains ROCm-enabled builds of Triton Inference Server for AMD GPUs. The following backends are available or in development:
+
+- **ONNX Runtime Backend** - Fully functional with ROCm 7.0.1 and MIGraphX acceleration
+- **vLLM Backend** - checkout other branches
+- **PyTorch Backend** - checkout other branches
+
+> **Note**: Triton Server with ONNX Runtime backend supports both **Ubuntu** and **Debian** distributions. 
+
+### Building ONNX Runtime Backend for ROCm (Debian 12)
+
+The following instructions are for building on **Debian 12** with ROCm 7.0.1.
+
+#### Prerequisites
+
+- Docker installed and running
+- AMD GPU with ROCm support
+- ROCm 7.0.1 or compatible version installed on the host
+
+#### Step 1: Build the ROCm Base Image
+
+First, create the base Docker image that includes Debian 12, ROCm 7.0.1, Python 3.10, and ONNX Runtime with ROCm support:
+
+```bash
+cd /path/to/tritonserver
+./build_debian_rocm_base.sh
+```
+
+This script builds the `local/rocm7.0_debian12_ort1.22_py310` base image, which serves as the foundation for:
+- Build base environment
+- ONNX Runtime build image
+- Runtime Triton Server build image
+
+#### Step 2: Build Triton Server with ONNX Runtime Backend
+
+Build the Triton Server with the ONNX Runtime backend enabled:
+
+```bash
+python3 build.py \
+  --no-container-pull \
+  --enable-logging \
+  --enable-stats \
+  --enable-tracing \
+  --enable-rocm \
+  --linux-distro debian \
+  --enable-metrics \
+  --verbose \
+  --endpoint=grpc \
+  --endpoint=http \
+  --backend=onnxruntime \
+  --library-paths=../onnxruntime_backend/
+```
+
+**Build Options Explained:**
+- `--enable-rocm`: Enable ROCm support
+- `--linux-distro debian`: Use Debian 12 as the base OS
+- `--endpoint=grpc --endpoint=http`: Enable both HTTP and gRPC inference protocols
+- `--backend=onnxruntime`: Build with ONNX Runtime backend
+
+#### Step 3: Run Triton Server
+
+Start the Triton Server container with your model repository:
+
+```bash
+docker run \
+  --name tritonserver_container \
+  --device=/dev/kfd \
+  --device=/dev/dri \
+  -it \
+  -e LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/conda/envs/py_3.10/lib:/opt/tritonserver/backends/onnxruntime:/opt/rocm-7.0.1/lib \
+  -p 8000:8000 \
+  -p 8001:8001 \
+  -p 8002:8002 \
+  --net=host \
+  -v /path/to/your/model_repository:/models \
+  tritonserver \
+  tritonserver --model-repository=/models --exit-on-error=false
+```
+
+**Important Parameters:**
+- `--device=/dev/kfd --device=/dev/dri`: Grant access to AMD GPU devices
+- `-p 8000:8000 -p 8001:8001 -p 8002:8002`: Expose HTTP (8000), gRPC (8001), and metrics (8002) ports
+- `-v /path/to/your/model_repository:/models`: Mount your model repository where your onnx checkpoints located
+
+#### Step 4: Testing with Performance Analyzer
+
+Use the Triton SDK container to run performance tests:
+
+```bash
+# Start the SDK container
+docker run -it --rm --net=host \
+  -v /path/to/triton_inference_server/external:/workspace/external \
+  nvcr.io/nvidia/tritonserver:24.04-py3-sdk \
+  /bin/bash
+
+# Inside the container, run performance analyzer
+perf_analyzer -m <model_name>  --input-data=<input data json file>
+```
+
+### Backend Development Status
+
+#### ONNX Runtime Backend 
+- **ROCm Support**: Multiple ROCm versions planned (currently tested with 7.0.1)
+- **ONNX Runtime Support**: Multiple versions planned (currently tested with 1.22.1)
+- **MIGraphX Support**: Version varies with ROCm version
+- **Acceleration**: MIGraphX execution provider
+
+
+### Contributing
+
+For ROCm-specific issues or contributions, please ensure you test on AMD hardware with supported ROCm versions. Refer to the Backend Development Status section for currently tested ROCm, ONNX Runtime, and MIGraphX version combinations.
+
+---
+
+## Original Triton Inference Server Documentation
+
+> **Note**: The following documentation is from NVIDIA's upstream Triton Inference Server and primarily covers NVIDIA GPU (CUDA) usage. For ROCm/AMD GPU support, refer to the ROCm-specific documentation above.
 
 ----
 Triton Inference Server is an open source inference serving software that
