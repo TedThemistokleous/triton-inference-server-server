@@ -6,8 +6,8 @@
 
 set -e
 
-IMAGE_NAME="local/debian12_rocm7.0_py310"
-DOCKERFILE="Dockerfile.debian12_rocm_base"
+IMAGE_NAME="local/rocm7.0_debian12_ort1.22_py310"
+DOCKERFILE="Dockerfile.debian12_rocm_ort_base"
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

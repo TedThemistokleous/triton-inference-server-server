@@ -744,14 +744,8 @@ def onnxruntime_cmake_args(images, library_paths):
            "/opt/rocm/",
             )
         )
-        cargs.append(
-            cmake_backend_arg(
-            "onnxruntime",
-            "TRITON_BUILD_MIGRAPHX_HOME",
-            None,
-            "/opt/rocm/",
-            )
-        )
+        # MIGraphX is already installed in base image at /opt/rocm
+        # No need to pass TRITON_BUILD_MIGRAPHX_HOME
 
     # If platform is jetpack do not use docker based build
     if target_platform() == "jetpack":
@@ -1129,24 +1123,14 @@ RUN wget -O /tmp/boost.tar.gz \
             df += install_dcgm_libraries(argmap["DCGM_VERSION"], target_machine())
         
         # Set ROCm environment variables for CMake to find HIP
-        # This is needed especially for Debian-based ROCm images which may not
-        # have these set by default
+        # ROCm, MIGraphX, and ONNX Runtime already installed in base image for both Debian and Ubuntu
         if FLAGS.enable_rocm:
-            if FLAGS.linux_distro == "debian":
-                # ROCm and Python 3.10 already installed in base image
-                df += """
+            df += """
+# ROCm, MIGraphX, and ONNX Runtime already installed in base image
 # Add user to video and render groups for GPU access
 RUN groupadd -f video && groupadd -f render
 
-# ROCm and Python 3.10 environment already configured in base image
-# Just verify CMAKE_PREFIX_PATH for CMake to find hip-config.cmake
-ENV CMAKE_PREFIX_PATH=/opt/rocm:/opt/rocm/lib/cmake:${CMAKE_PREFIX_PATH}
-"""
-            else:
-                # Ubuntu or other distros - use existing ROCm installation
-                df += """
 # Set ROCm environment variables for CMake to find HIP
-# CMAKE_PREFIX_PATH must include /opt/rocm so CMake can find hip-config.cmake
 ENV ROCM_PATH=/opt/rocm
 ENV HIP_PATH=/opt/rocm
 ENV CMAKE_PREFIX_PATH=/opt/rocm:/opt/rocm/lib/cmake:${CMAKE_PREFIX_PATH}
@@ -1484,10 +1468,10 @@ RUN ln -sf ${_CUDA_COMPAT_PATH}/lib.real ${_CUDA_COMPAT_PATH}/lib \
  && rm -f ${_CUDA_COMPAT_PATH}/lib
 """
     elif enable_rocm:
-        # ROCm, Python 3.10, and MIGraphX already installed in base image
+        # ROCm, MIGraphX, and ONNX Runtime already installed in base image
         df += """
-# ROCm and Python 3.10 environment already configured in base image
-# LD_LIBRARY_PATH already set in base image
+# ROCm, MIGraphX, and ONNX Runtime already installed in base image
+# Environment variables already configured
 """
     else:
         df += add_cpu_libs_to_linux_dockerfile(backends, target_machine)
@@ -1739,18 +1723,13 @@ def create_build_dockerfiles(
             FLAGS.upstream_container_version
         )
     elif FLAGS.enable_rocm:
-        if FLAGS.linux_distro == "debian":
-            # Use Debian 12 + ROCm + Python 3.10 base image
-            base_image = "local/debian12_rocm7.0_py310"
-        else:
-            # Check if onnxruntime backend is being built
-            has_onnxruntime = "onnxruntime" in backends
-            if has_onnxruntime:
-                # Use ROCm ONNX Runtime container which includes ORT and MIGraphX
-                base_image = "rocm/onnxruntime:rocm7.0_ub22.04_ort1.22_torch2.8.0"
+        if "onnxruntime" in backends:
+            if FLAGS.linux_distro == "debian":
+                base_image = "local/rocm7.0_debian12_ort1.22_py310"
             else:
-                # Use ROCm PyTorch container for other backends
-                base_image = "rocm/pytorch:rocm7.0_ubuntu22.04_py3.10_pytorch_release_2.8.0"
+                base_image = "rocm/onnxruntime:rocm7.0_ub22.04_ort1.22_torch2.8.0"
+        else:
+            base_image = "rocm/pytorch:rocm7.0_ubuntu22.04_py3.10_pytorch_release_2.8.0"
     else:
         base_image = "ubuntu:22.04"
 
@@ -1779,10 +1758,13 @@ def create_build_dockerfiles(
         if "gpu-base" in images:
             gpu_base_image = images["gpu-base"]
         elif FLAGS.enable_rocm:
-            if FLAGS.linux_distro == "debian":
-                base_image = "debian:12"
+            if "onnxruntime" in backends:
+                if FLAGS.linux_distro == "debian":
+                    gpu_base_image = "local/rocm7.0_debian12_ort1.22_py310"
+                else:
+                    gpu_base_image = "rocm/onnxruntime:rocm7.0_ub22.04_ort1.22_torch2.8.0"
             else:
-                base_image = "rocm/pytorch:rocm7.0_ubuntu22.04_py3.10_pytorch_release_2.8.0"
+                gpu_base_image = "rocm/pytorch:rocm7.0_ubuntu22.04_py3.10_pytorch_release_2.8.0"
         else:
             gpu_base_image = "nvcr.io/nvidia/tritonserver:{}-py3-min".format(
                 FLAGS.upstream_container_version
@@ -2142,7 +2124,7 @@ def backend_build(
         cmake_script.gitclone("tritonserver-pytorch", tag, be, github_organization)
     elif (be == "onnxruntime") and (FLAGS.enable_rocm):
         cmake_script.gitclone(
-            "tritonserver-onnxruntime", "linsun12/debian_enablement_use_wheels", "onnxruntime_backend", "https://github.com/ROCm")
+            "tritonserver-onnxruntime", "rocm7.0.1_ort1.22", "onnxruntime_backend", "https://github.com/ROCm")
     else:
         cmake_script.gitclone(backend_repo(be), tag, be, github_organization)
 

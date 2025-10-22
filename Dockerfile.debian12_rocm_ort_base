@@ -1,6 +1,6 @@
 #
 # Debian 12 + ROCm 7.0 + Python 3.10 Base Image
-# This base image is used by all Triton build stages to avoid redundant installations
+# This base image is used by all Triton build stages for onnxruntime backend with ROCm enabled on Debian OS to avoid redundant installations
 #
 
 FROM debian:12
@@ -24,7 +24,7 @@ RUN apt-get update && \
         pkg-config && \
     rm -rf /var/lib/apt/lists/*
 
-# Install Python 3.10 from source with optimizations
+# Install Python 3.10 from source on Debian 12
 RUN apt-get update && apt-get install -y --no-install-recommends \
         libssl-dev zlib1g-dev libbz2-dev \
         libreadline-dev libsqlite3-dev \
@@ -44,7 +44,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.10 -m pip install --upgrade pip setuptools==69.5.1 wheel && \
     rm -rf /var/lib/apt/lists/*
 
-# Install ROCm 7.0.1 (runtime + development packages)
+# Install ROCm 7.0.1 (runtime + development packages) on Debian 12
 RUN wget https://repo.radeon.com/amdgpu-install/7.0.1/ubuntu/jammy/amdgpu-install_7.0.1.70001-1_all.deb && \
     apt-get update && \
     apt-get install -y --no-install-recommends ./amdgpu-install_7.0.1.70001-1_all.deb && \
@@ -66,8 +66,7 @@ RUN wget https://repo.radeon.com/amdgpu-install/7.0.1/ubuntu/jammy/amdgpu-instal
         rocrand-dev \
         rccl \
         rccl-dev \
-        migraphx \
-        migraphx-dev && \
+        migraphx && \
     rm -rf /var/lib/apt/lists/*
 
 # Install libevent (needed by Triton for HTTP/gRPC endpoints)
@@ -98,11 +97,12 @@ ENV HIP_PATH=/opt/rocm
 ENV PATH=/opt/rocm/bin:${PATH}
 ENV LD_LIBRARY_PATH=/opt/rocm/lib:${LD_LIBRARY_PATH}
 
-# Verify installations
-RUN python3.10 --version && \
-    pip3 --version && \
-    hipconfig --version && \
-    echo "Base image build complete!"
+# Install ONNX Runtime with ROCm and MIGraphX support from prebuilt wheel
+RUN wget https://repo.radeon.com/rocm/manylinux/rocm-rel-7.0/onnxruntime_rocm-1.22.1-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl && \
+    pip3 install --timeout=300 --retries=5 onnxruntime_rocm-1.22.1-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl && \
+    rm onnxruntime_rocm-1.22.1-cp310-cp310-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl && \
+    pip3 cache purge
+
 
 WORKDIR /workspace
 
