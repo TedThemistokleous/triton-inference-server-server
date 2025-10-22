@@ -42,7 +42,9 @@ This repository contains ROCm-enabled builds of Triton Inference Server for AMD 
 
 > **Note**: Triton Server with ONNX Runtime backend supports both **Ubuntu** and **Debian** distributions. 
 
-### Building ONNX Runtime Backend for ROCm (Debian 12)
+## Build Triton Inference Server with onnxruntime backend 
+
+### On Debian 12
 
 The following instructions are for building on **Debian 12** with ROCm 7.0.1.
 
@@ -92,7 +94,44 @@ python3 build.py \
 - `--endpoint=grpc --endpoint=http`: Enable both HTTP and gRPC inference protocols
 - `--backend=onnxruntime`: Build with ONNX Runtime backend
 
-#### Step 3: Run Triton Server
+
+### On Ubuntu 22.04
+
+The following instructions are for building on **Ubuntu 22.04** with ROCm 7.0.0.
+
+#### Prerequisites
+
+- Docker installed and running
+- AMD GPU with ROCm support
+- ROCm 7.0.0 or compatible version installed on the host
+
+#### Step 1: Build Triton Server with ONNX Runtime Backend
+
+Build the Triton Server with the ONNX Runtime backend enabled:
+
+```bash
+python3 build.py \
+  --no-container-pull \
+  --enable-logging \
+  --enable-stats \
+  --enable-tracing \
+  --enable-rocm \
+  --linux-distro ubuntu \
+  --enable-metrics \
+  --verbose \
+  --endpoint=grpc \
+  --endpoint=http \
+  --backend=onnxruntime \
+  --library-paths=../onnxruntime_backend/
+```
+
+**Build Options Explained:**
+- `--enable-rocm`: Enable ROCm support
+- `--linux-distro ubuntu`: Use Ubuntu 22.04 as the base OS
+- `--endpoint=grpc --endpoint=http`: Enable both HTTP and gRPC inference protocols
+- `--backend=onnxruntime`: Build with ONNX Runtime backend
+
+## Run Triton Server
 
 Start the Triton Server container with your model repository:
 
@@ -117,7 +156,7 @@ docker run \
 - `-p 8000:8000 -p 8001:8001 -p 8002:8002`: Expose HTTP (8000), gRPC (8001), and metrics (8002) ports
 - `-v /path/to/your/model_repository:/models`: Mount your model repository where your onnx checkpoints located
 
-#### Step 4: Testing with Performance Analyzer
+#### Testing with Performance Analyzer
 
 Use the Triton SDK container to run performance tests:
 
@@ -132,9 +171,9 @@ docker run -it --rm --net=host \
 perf_analyzer -m <model_name>  --input-data=<input data json file>
 ```
 
-### Backend Development Status
+## Backend Development Status
 
-#### ONNX Runtime Backend 
+### ONNX Runtime Backend 
 - **ROCm Support**: Multiple ROCm versions planned (currently tested with 7.0.1)
 - **ONNX Runtime Support**: Multiple versions planned (currently tested with 1.22.1)
 - **MIGraphX Support**: Version varies with ROCm version
