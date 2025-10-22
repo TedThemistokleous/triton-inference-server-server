@@ -1133,46 +1133,14 @@ RUN wget -O /tmp/boost.tar.gz \
         # have these set by default
         if FLAGS.enable_rocm:
             if FLAGS.linux_distro == "debian":
-                # Install ROCm on bare-metal Debian 12
+                # ROCm and Python 3.10 already installed in base image
                 df += """
-# Install ROCm on Debian 12
-RUN apt-get update && apt-get install -y wget gnupg2 && \\
-    wget https://repo.radeon.com/amdgpu-install/7.0.1/ubuntu/jammy/amdgpu-install_7.0.1.70001-1_all.deb && \\
-    apt-get install -y ./amdgpu-install_7.0.1.70001-1_all.deb && \\
-    rm amdgpu-install_7.0.1.70001-1_all.deb && \\
-    apt-get update && \\
-    apt-get install -y python3-setuptools python3-wheel && \\
-    apt-get install -y rocm-dev rocm-libs miopen-hip rocblas hipblas && \\
-    rm -rf /var/lib/apt/lists/*
-
 # Add user to video and render groups for GPU access
 RUN groupadd -f video && groupadd -f render
 
-# Install Python 3.10 
-RUN apt-get update && apt-get install -y \\
-    wget build-essential libssl-dev zlib1g-dev libbz2-dev \\
-    libreadline-dev libsqlite3-dev curl libncursesw5-dev \\
-    xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev && \\
-    wget https://www.python.org/ftp/python/3.10.16/Python-3.10.16.tgz && \\
-    tar xzf Python-3.10.16.tgz && \\
-    cd Python-3.10.16 && \\
-    ./configure --enable-optimizations && \\
-    make -j$(nproc) && \\
-    make altinstall && \\
-    cd .. && rm -rf Python-3.10.16 Python-3.10.16.tgz && \\
-    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 && \\
-    update-alternatives --install /usr/bin/python3 python3 /usr/local/bin/python3.10 2 && \\
-    ln -sf /usr/bin/python3 /usr/bin/python && \\
-    python3.10 --version && \\
-    python3.10 -m pip install --upgrade pip setuptools==69.5.1 wheel && \\
-    rm -rf /var/lib/apt/lists/*
-
-# Set ROCm environment variables for CMake to find HIP
-ENV ROCM_PATH=/opt/rocm
-ENV HIP_PATH=/opt/rocm
+# ROCm and Python 3.10 environment already configured in base image
+# Just verify CMAKE_PREFIX_PATH for CMake to find hip-config.cmake
 ENV CMAKE_PREFIX_PATH=/opt/rocm:/opt/rocm/lib/cmake:${CMAKE_PREFIX_PATH}
-ENV PATH=/opt/rocm/bin:${PATH}
-ENV LD_LIBRARY_PATH=/opt/rocm/lib:${LD_LIBRARY_PATH}
 """
             else:
                 # Ubuntu or other distros - use existing ROCm installation
@@ -1516,47 +1484,10 @@ RUN ln -sf ${_CUDA_COMPAT_PATH}/lib.real ${_CUDA_COMPAT_PATH}/lib \
  && rm -f ${_CUDA_COMPAT_PATH}/lib
 """
     elif enable_rocm:
+        # ROCm, Python 3.10, and MIGraphX already installed in base image
         df += """
-# Install Python 3.10 for Debian (needed for ONNX Runtime and other backends)
-RUN apt-get update && apt-get install -y \\
-    wget build-essential libssl-dev zlib1g-dev libbz2-dev \\
-    libreadline-dev libsqlite3-dev curl libncursesw5-dev \\
-    xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev && \\
-    wget https://www.python.org/ftp/python/3.10.16/Python-3.10.16.tgz && \\
-    tar xzf Python-3.10.16.tgz && \\
-    cd Python-3.10.16 && \\
-    ./configure --enable-optimizations && \\
-    make -j$(nproc) && \\
-    make altinstall && \\
-    cd .. && rm -rf Python-3.10.16 Python-3.10.16.tgz && \\
-    update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.11 1 && \\
-    update-alternatives --install /usr/bin/python3 python3 /usr/local/bin/python3.10 2 && \\
-    ln -sf /usr/bin/python3 /usr/bin/python && \\
-    python3.10 --version && \\
-    python3.10 -m pip install --upgrade pip setuptools==69.5.1 wheel && \\
-    rm -rf /var/lib/apt/lists/*
-
-# Install ROCm runtime libraries for AMD GPU support
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends wget gnupg2 && \
-    wget https://repo.radeon.com/amdgpu-install/7.0.1/ubuntu/jammy/amdgpu-install_7.0.1.70001-1_all.deb && \
-    apt-get install -y ./amdgpu-install_7.0.1.70001-1_all.deb && \
-    rm amdgpu-install_7.0.1.70001-1_all.deb && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-            hip-base \
-            rocm-device-libs \
-            rocblas \
-            hipblas \
-            miopen-hip \
-            rocrand \
-            rccl && \
-    rm -rf /var/lib/apt/lists/*
-
-# Set ROCm environment variables
-ENV ROCM_PATH=/opt/rocm
-ENV HIP_PATH=/opt/rocm
-ENV LD_LIBRARY_PATH=/opt/rocm/lib:/opt/conda/envs/py_3.10/lib:${LD_LIBRARY_PATH}
+# ROCm and Python 3.10 environment already configured in base image
+# LD_LIBRARY_PATH already set in base image
 """
     else:
         df += add_cpu_libs_to_linux_dockerfile(backends, target_machine)
@@ -1809,8 +1740,8 @@ def create_build_dockerfiles(
         )
     elif FLAGS.enable_rocm:
         if FLAGS.linux_distro == "debian":
-            # Use bare-metal Debian 12 and install ROCm in runtime from scratch
-            base_image = "debian:12"
+            # Use Debian 12 + ROCm + Python 3.10 base image
+            base_image = "local/debian12_rocm7.0_py310"
         else:
             # Check if onnxruntime backend is being built
             has_onnxruntime = "onnxruntime" in backends
