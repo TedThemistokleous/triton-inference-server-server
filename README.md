@@ -58,7 +58,7 @@ First, create the base Docker image that includes Debian 12, ROCm 7.0.1, Python 
 
 ```bash
 cd /path/to/tritonserver
-./build_debian_rocm_base.sh
+bash build_debian_rocm_base.sh
 ```
 
 This script builds the `local/rocm7.0_debian12_ort1.22_py310` base image, which serves as the foundation for:
