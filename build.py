@@ -1725,7 +1725,8 @@ def create_build_dockerfiles(
     elif FLAGS.enable_rocm:
         if "onnxruntime" in backends:
             if FLAGS.linux_distro == "debian":
-                base_image = "local/rocm7.0_debian12_ort1.22_py310"
+                # base_image = "local/rocm7.0_debian12_ort1.22_py310"
+                base_image = "debian_base_rocm7.0_build_from_scratch"
             else:
                 base_image = "rocm/onnxruntime:rocm7.0_ub22.04_ort1.22_torch2.8.0"
         else:
@@ -1760,7 +1761,8 @@ def create_build_dockerfiles(
         elif FLAGS.enable_rocm:
             if "onnxruntime" in backends:
                 if FLAGS.linux_distro == "debian":
-                    gpu_base_image = "local/rocm7.0_debian12_ort1.22_py310"
+                    # gpu_base_image = "local/rocm7.0_debian12_ort1.22_py310"
+                    gpu_base_image = "debian_base_rocm7.0_build_from_scratch"
                 else:
                     gpu_base_image = "rocm/onnxruntime:rocm7.0_ub22.04_ort1.22_torch2.8.0"
             else:
@@ -2137,9 +2139,10 @@ def backend_build(
         cmake_script.cmd("python setup.py install")
         cmake_script.cwd(build_dir)
     elif be == "onnxruntime" and FLAGS.enable_rocm:
-
+        # ONNX Runtime library is pre-built in base image, but Triton backend code needs hipification
         cmake_script.mkdir(repo_build_dir)
         cmake_script.cwd(repo_build_dir)
+        
         cmake_script.comment("")
         cmake_script.comment("Find all the source files containing string \"cuda\", and hipify")
         cmake_script.comment("the \"|| echo...\" prevents exiting the script if grep finds nothing")
@@ -2151,7 +2154,7 @@ def backend_build(
 
         cmake_script.cmd("sed -i \"s/CudaStream()/RocmStream()/\" /tmp/tritonbuild/onnxruntime_backend/src/onnxruntime.cc")
         cmake_script.comment()
-
+        
         cmake_script.cmake(
             backend_cmake_args(images, components, be, repo_install_dir, library_paths)
         )
