@@ -1725,8 +1725,7 @@ def create_build_dockerfiles(
     elif FLAGS.enable_rocm:
         if "onnxruntime" in backends:
             if FLAGS.linux_distro == "debian":
-                # base_image = "local/rocm7.0_debian12_ort1.22_py310"
-                base_image = "debian_base_rocm7.0_build_from_scratch"
+                base_image = "local/rocm7.0_debian12_ort1.22_py310"
             else:
                 base_image = "rocm/onnxruntime:rocm7.0_ub22.04_ort1.22_torch2.8.0"
         else:
@@ -1761,8 +1760,7 @@ def create_build_dockerfiles(
         elif FLAGS.enable_rocm:
             if "onnxruntime" in backends:
                 if FLAGS.linux_distro == "debian":
-                    # gpu_base_image = "local/rocm7.0_debian12_ort1.22_py310"
-                    gpu_base_image = "debian_base_rocm7.0_build_from_scratch"
+                    gpu_base_image = "local/rocm7.0_debian12_ort1.22_py310"
                 else:
                     gpu_base_image = "rocm/onnxruntime:rocm7.0_ub22.04_ort1.22_torch2.8.0"
             else:
