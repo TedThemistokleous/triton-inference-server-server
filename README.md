@@ -154,7 +154,7 @@ docker run \
 **Important Parameters:**
 - `--device=/dev/kfd --device=/dev/dri`: Grant access to AMD GPU devices
 - `-p 8000:8000 -p 8001:8001 -p 8002:8002`: Expose HTTP (8000), gRPC (8001), and metrics (8002) ports
-- `-v /path/to/your/model_repository:/models`: Mount your model repository where your onnx checkpoints located
+- `-v /path/to/your/model_repository:/models`: Mount your model repository where your onnx checkpoints located. **Please make sure you only have model checkpoints and model config file under /path/to/your/model_repository**
 
 #### Testing with Performance Analyzer
 
