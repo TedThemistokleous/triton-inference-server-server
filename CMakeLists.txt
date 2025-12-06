@@ -72,9 +72,9 @@ option(TRITON_ENABLE_ASAN "Build with address sanitizer" OFF)
 set(TRITON_COMMON_REPO_TAG "main" CACHE STRING "Tag for triton-inference-server/common repo")
 if(${TRITON_ENABLE_ROCM})
   set(TRITON_THIRD_PARTY_REPO_TAG "add_migraphx_rocm_eps_hipify" CACHE STRING
-      "Tag for ROCm/tritonserver-third_party repo")
-  set(TRITON_CORE_REPO_TAG "add_migraphx_rocm_eps_hipify" CACHE STRING "Tag for ROCm/tritonserver-core repo")
-  set(TRITON_BACKEND_REPO_TAG "add_migraphx_rocm_eps_hipify" CACHE STRING "Tag for triton-inference-server/backend repo")
+      "Tag for ROCm/triton-inference-server-third_party repo")
+  set(TRITON_CORE_REPO_TAG "add_migraphx_rocm_eps_hipify" CACHE STRING "Tag for ROCm/triton-inference-server-core repo")
+  set(TRITON_BACKEND_REPO_TAG "add_migraphx_rocm_eps_hipify" CACHE STRING "Tag for ROCm/triton-inference-server-backend repo")
 else()
   set(TRITON_THIRD_PARTY_REPO_TAG "main" CACHE STRING
     "Tag for triton-inference-server/third_party repo")
